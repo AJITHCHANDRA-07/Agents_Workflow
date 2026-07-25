@@ -1,0 +1,340 @@
+{
+  "name": "Email Agent - Draft Reply + Slack + WhatsApp Notify",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "groqApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"llama-3.3-70b-versatile\",\n  messages: [{\n    role: \"user\",\n    content: `You are drafting an email reply on behalf of the user.\\n\\nEmail from: ${$json.fromName} (${$json.from})\\nSubject: ${$json.subject}\\n\\nEmail body:\\n${$json.body}\\n\\nWrite a professional, concise reply. Always sign off with \"Best regards,\\\\nAjith Chandra\" - never use a placeholder like [Your Name] or [User's Name]. Do not commit to anything requiring approval - this includes: budgets, financial figures, deadlines, promises, discounts, refunds, contracts, legal matters, passwords, OTPs, login credentials, personal/private data (salary, medical, ID numbers), or anything confidential. If the email involves ANY of these, write \"[NEEDS HUMAN INPUT: reason]\" instead of guessing or replying normally.\\n\\nAlso provide a 1-2 line summary of what this email is about, prefixed with \\\"SUMMARY:\\\" on its own line before the reply, prefixed with \\\"REPLY:\\\".`\n  }]\n}) }}",
+        "options": {}
+      },
+      "id": "fed366a2-d566-4f96-aac3-218655b10045",
+      "name": "Groq - Draft Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -416,
+        624
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "nvejhqU7lXCsuRhy",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Re: {{ $json.subject }}",
+        "message": "={{ $json.aiReply }}",
+        "options": {
+          "sendTo": "={{ $json.from }}"
+        }
+      },
+      "id": "81038754-dbda-4ece-9ea3-4f689d1d03a3",
+      "name": "Gmail - Create Draft",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        496
+      ],
+      "webhookId": "9eb13f9c-fdd5-4459-b166-dcef9118128a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "SALQduCxWs7SKpBw",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0ARP7UJP3J",
+          "mode": "id"
+        },
+        "text": "=={{ '📧 *New Email*\\n*From:* ' + $('Parse Groq Response1').item.json.fromName + ' (' + $('Parse Groq Response1').item.json.from + ')' + '\\n*Subject:* ' + $('Parse Groq Response1').item.json.subject + '\\n*Summary:* ' + $('Parse Groq Response1').item.json.aiSummary + '\\n*Status:* ' + ($('Parse Groq Response1').item.json.needsHuman ? '⚠️ Needs your input - draft saved in Gmail, not sent' : '✅ Reply sent automatically') }}",
+        "otherOptions": {}
+      },
+      "id": "e3bae791-e7f8-438a-8a16-9793a2845719",
+      "name": "Slack - Post Update",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        560
+      ],
+      "webhookId": "de87ee2a-1981-4730-9b61-b9ca18f18ec6",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "wmLCVCVgNJdGyzvD",
+          "name": "Slack account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+14155238886",
+        "to": "+918074930313",
+        "toWhatsapp": true,
+        "message": "=={{ ($('Parse Groq Response1').item.json.needsHuman ? '⚠️ Draft saved (needs your review): Email from ' : '✅ Auto-replied to email from ') + $('Parse Groq Response1').item.json.fromName + '\\nSubject: ' + $('Parse Groq Response1').item.json.subject + '\\n' + $('Parse Groq Response1').item.json.aiSummary + ($('Parse Groq Response1').item.json.needsHuman ? '\\n\\nCheck Gmail to review & send.' : '') }}",
+        "options": {}
+      },
+      "id": "7e54309a-f6e9-4dec-adbb-dce12727796a",
+      "name": "Twilio - WhatsApp Notify",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        512,
+        832
+      ],
+      "credentials": {
+        "twilioApi": {
+          "id": "pSuYE4UfttFzjPpf",
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "needs-human-check",
+              "leftValue": "={{ $json.needsHuman }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "67bb1dcc-9b72-45e9-b16e-e1080ada7810",
+      "name": "Needs Human Review?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        32,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.from }}",
+        "subject": "=Re: {{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.aiReply }}",
+        "options": {}
+      },
+      "id": "f83a1366-d05c-4a77-ba16-356f9ee95acb",
+      "name": "Gmail - Auto Send Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        256,
+        736
+      ],
+      "webhookId": "3bd4546a-0eca-465b-abc9-14a28f405d7b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "SALQduCxWs7SKpBw",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "is:unread in:inbox after:2026/07/20"
+        },
+        "options": {}
+      },
+      "id": "d8795248-3789-4561-90bb-824808967cff",
+      "name": "Gmail Trigger - New Email1",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [
+        -848,
+        624
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "SALQduCxWs7SKpBw",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract clean fields from the incoming email\nconst email = $input.item.json;\n\nreturn {\n  from: email.from?.value?.[0]?.address || email.from || 'unknown',\n  fromName: email.from?.value?.[0]?.name || 'Unknown Sender',\n  subject: email.subject || '(no subject)',\n  body: email.textPlain || email.textHtml || email.snippet || '',\n  threadId: email.threadId,\n  messageId: email.id\n};"
+      },
+      "id": "04d122bd-828c-4d13-8943-0371e4da20b3",
+      "name": "Extract Email Fields1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -624,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Groq's response into summary + reply text\nconst response = $input.item.json;\nconst text = response.choices?.[0]?.message?.content || '';\n\nconst summaryMatch = text.match(/SUMMARY:\\s*([\\s\\S]*?)(?=REPLY:|$)/i);\nconst replyMatch = text.match(/REPLY:\\s*([\\s\\S]*)/i);\n\nconst summary = summaryMatch ? summaryMatch[1].trim() : 'Summary unavailable';\nconst reply = replyMatch ? replyMatch[1].trim() : text.trim();\n\nlet needsHuman = reply.includes('[NEEDS HUMAN INPUT');\n\n// HARD SAFETY NET - forces human review regardless of what the AI decided\nconst originalEmail = $('Extract Email Fields1').item.json;\nconst fullText = (originalEmail.subject + ' ' + originalEmail.body).toLowerCase();\n\nconst sensitiveKeywords = [\n  'password', 'otp', 'one time password', 'login credential', 'username and password',\n  'ssn', 'social security', 'aadhaar', 'pan card', 'bank account', 'account number',\n  'ifsc', 'salary', 'confidential', 'budget', 'invoice', 'refund', 'discount',\n  'contract', 'agreement', 'legal', 'lawsuit', 'nda', 'non-disclosure',\n  'medical', 'health record', 'resignation', 'termination', 'offer letter'\n];\n\nconst matchedKeyword = sensitiveKeywords.find(keyword => fullText.includes(keyword));\nif (matchedKeyword) {\n  needsHuman = true;\n}\n\nreturn {\n  ...originalEmail,\n  aiSummary: summary,\n  aiReply: reply,\n  needsHuman,\n  flaggedKeyword: matchedKeyword || null\n};"
+      },
+      "id": "dc4d9822-427a-4894-97eb-cbb36fa89d01",
+      "name": "Parse Groq Response1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        624
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Groq - Draft Reply": {
+      "main": [
+        [
+          {
+            "node": "Parse Groq Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Human Review?": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Create Draft",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gmail - Auto Send Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Auto Send Reply": {
+      "main": [
+        [
+          {
+            "node": "Slack - Post Update",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Twilio - WhatsApp Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger - New Email1": {
+      "main": [
+        [
+          {
+            "node": "Extract Email Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Email Fields1": {
+      "main": [
+        [
+          {
+            "node": "Groq - Draft Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Groq Response1": {
+      "main": [
+        [
+          {
+            "node": "Needs Human Review?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Create Draft": {
+      "main": [
+        [
+          {
+            "node": "Slack - Post Update",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Twilio - WhatsApp Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "d28b921a-9c81-4423-b240-709c63d7cdfc",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c665e2efbd7102def71b71ff1ff990a5b21a0de9e45cee779816993398c32cba"
+  },
+  "nodeGroups": [],
+  "id": "4UhK3wKWJKUT92hh",
+  "tags": []
+}
